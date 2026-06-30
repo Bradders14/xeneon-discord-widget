@@ -218,6 +218,27 @@
   }
   .ocard .demo-link a{color:var(--accent);cursor:pointer;text-decoration:underline;font-weight:600}
 
+  /* error panel (shown when connect fails) */
+  .err-panel{
+    margin-top:16px;padding:14px 15px;border-radius:11px;text-align:left;
+    background:rgba(246,67,67,.08);border:1px solid rgba(246,67,67,.28);
+    display:none;flex-direction:column;gap:10px;
+  }
+  .err-panel.show{display:flex;animation:cardIn .3s ease}
+  .err-panel .eh{display:flex;align-items:center;gap:9px}
+  .err-panel .eh svg{width:18px;height:18px;color:#F64343;flex:0 0 auto}
+  .err-panel .eh b{font-size:13.5px;color:#FF8080;font-weight:700}
+  .err-panel .et{font-size:12px;color:var(--text-mute);line-height:1.55}
+  .err-panel .et b{color:var(--text);font-weight:600}
+  .err-panel .et code{background:rgba(255,255,255,.08);padding:1px 5px;border-radius:4px;font-size:11px;color:var(--accent);font-family:ui-monospace,monospace}
+  .err-panel .full-btn{
+    width:100%;padding:11px;border-radius:9px;border:1px solid rgba(0,240,255,.4);cursor:pointer;
+    background:rgba(0,240,255,.1);color:var(--accent);font-size:12.5px;font-weight:700;transition:.15s;
+    display:flex;align-items:center;justify-content:center;gap:8px;
+  }
+  .err-panel .full-btn:hover{background:rgba(0,240,255,.18)}
+  .err-panel .full-btn svg{width:14px;height:14px}
+
   /* ===== Toast ===== */
   .toast-wrap{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
   .toast{
@@ -334,6 +355,14 @@
       <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
       <span>In the share dialog, choose <b>"Entire screen"</b> and tick <b>"Share system audio"</b> to capture all PC sound.</span>
     </div>
+    <div class="err-panel" id="errPanel">
+      <div class="eh"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg><b id="errTitle">Couldn't capture audio</b></div>
+      <div class="et" id="errBody"></div>
+      <button class="full-btn" id="fullPageBtn">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14 21 3"/></svg>
+        Open as full page (recommended)
+      </button>
+    </div>
     <div class="demo-link">Just exploring? <a id="demoLink">Run in demo mode</a></div>
   </div>
 </div>
@@ -389,7 +418,24 @@ window.addEventListener('resize',resize);resize();
 ========================================================= */
 let audioCtx,analyser,source,freqData,timeData;
 const FFT=1024;
+const inIframe=(window.self!==window.top);
+function showError(title,body){
+  const p=document.getElementById('errPanel');
+  document.getElementById('errTitle').textContent=title;
+  document.getElementById('errBody').innerHTML=body;
+  p.classList.add('show');
+}
+function clearError(){document.getElementById('errPanel').classList.remove('show');}
 async function connectAudio(){
+  clearError();
+  // 1. API support check
+  if(!navigator.mediaDevices||!navigator.mediaDevices.getDisplayMedia){
+    showError('Not supported here',
+      'This browser doesn\'t support screen/audio capture. On the Xeneon, use a Chromium browser (Chrome/Edge) in <b>kiosk mode</b> pointing at this URL instead of an iframe widget.');
+    return false;
+  }
+  // 2. focus the window (InvalidStateError is often a focus issue)
+  try{window.focus();}catch(e){}
   try{
     const stream=await navigator.mediaDevices.getDisplayMedia({
       video:{width:1,height:1},
@@ -400,10 +446,12 @@ async function connectAudio(){
     // user may have picked video-only; check audio track
     if(stream.getAudioTracks().length===0){
       stream.getTracks().forEach(t=>t.stop());
-      toast('err','No audio shared. Tick "Share system audio" next time.');
+      showError('No audio shared',
+        'You shared video only. In the dialog, choose <b>"Entire screen"</b> and tick <b>"Share system audio"</b>. Then tap Connect again.');
       return false;
     }
     audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    if(audioCtx.state==='suspended'){try{await audioCtx.resume();}catch(e){}}
     source=audioCtx.createMediaStreamSource(stream);
     analyser=audioCtx.createAnalyser();
     analyser.fftSize=FFT;
@@ -415,6 +463,7 @@ async function connectAudio(){
     // stop if user ends the share
     stream.getAudioTracks()[0].addEventListener('ended',()=>{
       disconnectAudio();
+      document.getElementById('overlay').classList.remove('hidden');
       toast('info','Audio sharing ended');
     });
     updateStatus();
@@ -422,7 +471,23 @@ async function connectAudio(){
     toast('ok','Connected to PC audio');
     return true;
   }catch(e){
-    if(e.name!=='NotAllowedError') toast('err','Could not connect: '+(e.message||e.name));
+    const name=e.name||'';
+    if(name==='NotAllowedError'||name==='AbortError'){
+      // user cancelled — no error panel, just a toast
+      toast('info','Cancelled — tap Connect to try again');
+    }else if(name==='InvalidStateError'||/invalid state/i.test(e.message||'')){
+      // the iframe-permission / focus problem
+      const reason=inIframe
+        ? 'You\'re viewing this inside an <b>iframe</b> (your Xeneon widget). Browsers block screen/audio capture in nested iframes for security — the widget\'s wrapper iframe doesn\'t have <code>display-capture</code> permission.'
+        : 'The window wasn\'t focused when Connect was tapped, or this browser blocks the capture API.';
+      showError('Capture blocked by browser',
+        reason+' <br><br>The fix: tap <b>"Open as full page"</b> below to load the visualizer as a normal browser page (not in an iframe), then tap Connect there. On the Xeneon, set this up once with <b>Chrome kiosk mode</b> and it\'ll work every boot.');
+    }else if(name==='NotFoundError'||name==='DevicesNotFoundError'){
+      showError('No audio device found','No suitable audio output was detected. Make sure speakers/headphones are connected and not muted in Windows.');
+    }else{
+      showError('Connection failed',
+        'Unexpected error: <b>'+(e.message||name||'unknown')+'</b>.<br><br>If this keeps happening, tap <b>"Open as full page"</b> below — running outside the iframe usually fixes it.');
+    }
     return false;
   }
 }
@@ -760,10 +825,15 @@ const pinBtn=document.getElementById('pinBtn');
 pinBtn.addEventListener('click',()=>{state.pinned=!state.pinned;pinBtn.classList.toggle('active',state.pinned);toast('info',state.pinned?'Controls pinned':'Auto-hide on');});
 
 // connect
-document.getElementById('connectBtn').addEventListener('click',connectAudio);
+document.getElementById('connectBtn').addEventListener('click',()=>{clearError();connectAudio();});
 document.getElementById('demoLink').addEventListener('click',()=>{
   document.getElementById('overlay').classList.add('hidden');
   toast('info','Running in demo mode');
+});
+// open as full page (escapes the iframe so getDisplayMedia works)
+document.getElementById('fullPageBtn').addEventListener('click',()=>{
+  // target=_top replaces the topmost frame (the widget) with the visualizer
+  window.open(location.href,'_top');
 });
 
 /* auto-hide top bar */
