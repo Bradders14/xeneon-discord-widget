@@ -2,21 +2,22 @@
 
 import { useEffect, useRef, useState, useCallback } from 'react'
 import {
+  AudioLines,
   Monitor,
   Maximize2,
   Minimize2,
   ExternalLink,
-  Volume2,
-  Mic,
-  Users,
-  MessageSquare,
-  Settings2,
+  Palette,
+  SlidersHorizontal,
   Radio,
-  Sparkles,
+  Music,
+  Volume2,
+  Eye,
   Cpu,
+  Play,
 } from 'lucide-react'
 
-const WIDGET_W = 2560
+const WIDGET_W = 1280
 const WIDGET_H = 800
 
 export default function Home() {
@@ -28,7 +29,11 @@ export default function Home() {
     const el = screenRef.current
     if (!el) return
     const w = el.clientWidth
-    if (w > 0) setScale(w / WIDGET_W)
+    const h = el.clientHeight
+    if (w > 0 && h > 0) {
+      // fit by width; visualizer canvas is fluid so aspect is flexible
+      setScale(w / WIDGET_W)
+    }
   }, [])
 
   useEffect(() => {
@@ -44,40 +49,40 @@ export default function Home() {
 
   const features = [
     {
-      icon: Volume2,
-      title: 'Voice & Audio Controls',
-      desc: 'Per-user volume sliders, local mute, master input/output, Krisp noise suppression & device switchers.',
-      tint: 'from-emerald-500/20 to-emerald-500/5 text-emerald-300',
+      icon: Music,
+      title: 'Any PC Audio',
+      desc: 'Captures system sound via the browser — Spotify, YouTube, games, Tidal, anything playing. No app install.',
+      tint: 'from-cyan-500/20 to-cyan-500/5 text-cyan-300',
     },
     {
-      icon: Users,
-      title: 'Channel Management',
-      desc: 'Quick-connect channel chips, "Pull Up" a friend, live who\'s-talking glow rings & waveforms.',
+      icon: Eye,
+      title: '6 Visualisation Modes',
+      desc: 'Bars, Mirror, Waveform, Radial, Ring and Particles — switch instantly from the top bar.',
       tint: 'from-fuchsia-500/20 to-fuchsia-500/5 text-fuchsia-300',
     },
     {
-      icon: MessageSquare,
-      title: 'Text & Status Macros',
-      desc: 'Status changer, custom status presets, quick-text macros per channel & PTT release delay slider.',
-      tint: 'from-violet-500/20 to-violet-500/5 text-violet-300',
+      icon: Palette,
+      title: 'Full Colour Control',
+      desc: '8 presets (Neon, Aurora, Sunset, Lava, UV, Gold, Matrix, Mono) plus custom start/end colour pickers.',
+      tint: 'from-amber-500/20 to-amber-500/5 text-amber-300',
     },
     {
-      icon: Sparkles,
-      title: 'Touch UX & Visuals',
-      desc: 'Glassmorphism Discord-grey UI, oversized mute/deafen buttons with swipe, reactive audio visualizer.',
-      tint: 'from-amber-500/20 to-amber-500/5 text-amber-300',
+      icon: SlidersHorizontal,
+      title: 'Tune Everything',
+      desc: 'Sensitivity, smoothing, glow strength, background trail and beat-pulse — all on live sliders.',
+      tint: 'from-emerald-500/20 to-emerald-500/5 text-emerald-300',
     },
   ]
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#0c0d10] text-zinc-200 selection:bg-fuchsia-500/30">
+    <div className="min-h-screen flex flex-col bg-[#06070a] text-zinc-200 selection:bg-cyan-500/30">
       {/* ambient glow */}
       <div
         aria-hidden
-        className="pointer-events-none fixed inset-0 opacity-70"
+        className="pointer-events-none fixed inset-0 opacity-80"
         style={{
           background:
-            'radial-gradient(900px 480px at 12% -8%, rgba(88,101,242,.18), transparent 60%), radial-gradient(820px 460px at 100% 0%, rgba(235,69,158,.14), transparent 55%), radial-gradient(700px 500px at 50% 120%, rgba(35,165,89,.10), transparent 60%)',
+            'radial-gradient(900px 480px at 10% -8%, rgba(0,240,255,.14), transparent 60%), radial-gradient(820px 460px at 100% 0%, rgba(255,0,229,.12), transparent 55%), radial-gradient(700px 500px at 50% 120%, rgba(0,255,157,.08), transparent 60%)',
         }}
       />
 
@@ -86,32 +91,30 @@ export default function Home() {
         <header className="px-5 sm:px-8 pt-7 pb-4">
           <div className="max-w-[1400px] mx-auto flex flex-wrap items-center gap-4 justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-[#5865F2] to-[#EB459E] grid place-items-center shadow-lg shadow-fuchsia-500/20">
-                <Radio className="w-6 h-6 text-white" />
+              <div className="w-11 h-11 rounded-xl bg-gradient-to-br from-cyan-400 to-fuchsia-500 grid place-items-center shadow-lg shadow-cyan-500/20">
+                <AudioLines className="w-6 h-6 text-black" />
               </div>
               <div>
                 <h1 className="text-xl sm:text-2xl font-bold text-white tracking-tight leading-tight">
-                  Corsair Xeneon Edge
-                  <span className="text-zinc-400 font-medium"> · Discord Widget</span>
+                  Xeneon Music Visualizer
                 </h1>
                 <p className="text-xs sm:text-sm text-zinc-400">
-                  A 14.5&quot; touch display control surface for Discord RPC — rendered live in an
-                  iframe below.
+                  A reactive music visualizer for the Corsair Xeneon Edge — live in an iframe below.
                 </p>
               </div>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-              <Badge icon={Monitor} label="2560 × 800" sub="16:5" />
-              <Badge icon={Cpu} label="Discord RPC" sub="live" pulse />
+              <Badge icon={Monitor} label="Medium → XL" sub="scalable" />
+              <Badge icon={Cpu} label="Pure browser" sub="no app" pulse />
               <a
-                href="/discord-widget.html"
+                href="/visualizer.html"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="inline-flex items-center gap-2 px-3.5 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-xs font-semibold text-zinc-200 transition"
               >
                 <ExternalLink className="w-3.5 h-3.5" />
-                Open widget
+                Open visualizer
               </a>
             </div>
           </div>
@@ -122,8 +125,8 @@ export default function Home() {
           <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-3 mb-3">
             <div className="flex items-center gap-2 text-xs text-zinc-400">
               <span className="inline-flex items-center gap-1.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-                Live preview
+                <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />
+                Live preview · demo mode
               </span>
               <span className="text-zinc-600">·</span>
               <span className="tabular-nums">
@@ -165,7 +168,6 @@ export default function Home() {
               style={rawMode ? undefined : { maxWidth: 1180 }}
             >
               {rawMode ? (
-                /* Raw mode: just the screen, full width */
                 <div
                   ref={screenRef}
                   className="relative w-full"
@@ -174,7 +176,6 @@ export default function Home() {
                   <ScaledIframe scale={scale} />
                 </div>
               ) : (
-                /* Device mockup */
                 <div className="relative">
                   {/* monitor body */}
                   <div
@@ -186,14 +187,12 @@ export default function Home() {
                         '0 30px 80px -20px rgba(0,0,0,.8), inset 0 1px 0 rgba(255,255,255,.08), inset 0 -1px 0 rgba(0,0,0,.6)',
                     }}
                   >
-                    {/* screen */}
                     <div
                       ref={screenRef}
                       className="relative w-full overflow-hidden rounded-[10px] bg-black"
                       style={{ aspectRatio: `${WIDGET_W} / ${WIDGET_H}` }}
                     >
                       <ScaledIframe scale={scale} />
-                      {/* subtle screen glare */}
                       <div
                         aria-hidden
                         className="pointer-events-none absolute inset-0 rounded-[10px]"
@@ -207,7 +206,7 @@ export default function Home() {
                     {/* bottom chin with branding */}
                     <div className="flex items-center justify-between px-3 pt-2.5 pb-1">
                       <div className="flex items-center gap-2">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 shadow-[0_0_8px_rgba(45,199,112,.8)]" />
+                        <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 shadow-[0_0_8px_rgba(0,240,255,.8)]" />
                         <span className="text-[10px] font-semibold tracking-[0.25em] text-zinc-500">
                           CORSAIR
                         </span>
@@ -243,8 +242,24 @@ export default function Home() {
               )}
             </div>
 
+            {/* How it works strip */}
+            <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] p-4">
+              <div className="flex items-start gap-3">
+                <div className="w-9 h-9 rounded-lg bg-cyan-500/15 grid place-items-center flex-shrink-0">
+                  <Play className="w-4 h-4 text-cyan-300" />
+                </div>
+                <div className="text-xs text-zinc-300 leading-relaxed">
+                  <b className="text-white">How it works on your Xeneon:</b> Add an iframe widget
+                  pointing to <code className="px-1.5 py-0.5 rounded bg-white/10 text-cyan-300 font-mono text-[11px]">/visualizer.html</code>,
+                  set to Medium or larger. On first load, tap <b>“Connect PC Audio”</b> and in the
+                  share dialog pick <b>Entire screen</b> + tick <b>“Share system audio”</b>. The
+                  visualiser then reacts to anything your PC plays — no companion app, no install.
+                </div>
+              </div>
+            </div>
+
             {/* Feature cards */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mt-6">
               {features.map((f) => (
                 <div
                   key={f.title}
@@ -263,12 +278,12 @@ export default function Home() {
 
             {/* spec strip */}
             <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] p-4 flex flex-wrap items-center gap-x-6 gap-y-3 justify-center text-center">
-              <Spec icon={Mic} label="Per-user volume" />
-              <Spec icon={Volume2} label="Master I/O + Krisp" />
-              <Spec icon={Users} label="Quick-connect channels" />
-              <Spec icon={MessageSquare} label="Text & status macros" />
-              <Spec icon={Settings2} label="Device switchers" />
-              <Spec icon={Sparkles} label="Audio visualizer" />
+              <Spec icon={Music} label="System audio capture" />
+              <Spec icon={Eye} label="6 visual modes" />
+              <Spec icon={Palette} label="8 presets + custom" />
+              <Spec icon={SlidersHorizontal} label="Live tuning" />
+              <Spec icon={Volume2} label="Sensitivity & glow" />
+              <Spec icon={Radio} label="Beat-reactive" />
             </div>
           </div>
         </main>
@@ -277,11 +292,11 @@ export default function Home() {
         <footer className="mt-auto border-t border-white/10 bg-black/40 backdrop-blur-md">
           <div className="max-w-[1400px] mx-auto px-5 sm:px-8 py-4 flex flex-wrap items-center justify-between gap-3">
             <p className="text-xs text-zinc-500">
-              Concept widget · Discord RPC integration requires the desktop companion app. UI is fully
-              interactive in this preview.
+              Pure-browser visualiser · uses getDisplayMedia with system-audio sharing. Deploy to
+              Vercel and embed via iframe on the Xeneon.
             </p>
             <p className="text-xs text-zinc-600">
-              Built for Corsair Xeneon Edge · 14.5&quot; · 2560×800
+              Built for Corsair Xeneon Edge · scales Medium → XL
             </p>
           </div>
         </footer>
@@ -295,8 +310,8 @@ export default function Home() {
 function ScaledIframe({ scale }: { scale: number }) {
   return (
     <iframe
-      src="/discord-widget.html"
-      title="Corsair Xeneon Edge Discord Widget"
+      src="/visualizer.html"
+      title="Xeneon Music Visualizer"
       loading="eager"
       className="absolute top-0 left-0 origin-top-left border-0"
       style={{
@@ -305,6 +320,7 @@ function ScaledIframe({ scale }: { scale: number }) {
         transform: `scale(${scale})`,
         pointerEvents: 'auto',
       }}
+      allow="autoplay; microphone; display-capture"
     />
   )
 }
@@ -326,7 +342,7 @@ function Badge({
       <span className="text-xs font-semibold text-zinc-200">{label}</span>
       {sub && (
         <span className="inline-flex items-center gap-1 text-[10px] font-medium text-zinc-400">
-          {pulse && <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />}
+          {pulse && <span className="w-1.5 h-1.5 rounded-full bg-cyan-400 animate-pulse" />}
           {sub}
         </span>
       )}
@@ -337,7 +353,7 @@ function Badge({
 function Spec({ icon: Icon, label }: { icon: React.ElementType; label: string }) {
   return (
     <div className="inline-flex items-center gap-2">
-      <Icon className="w-4 h-4 text-fuchsia-300/80" />
+      <Icon className="w-4 h-4 text-cyan-300/80" />
       <span className="text-xs font-medium text-zinc-300">{label}</span>
     </div>
   )

@@ -1,0 +1,802 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
+<title>Xeneon Music Visualizer</title>
+<style>
+  :root{
+    --bg:#06070a;
+    --panel:rgba(16,18,26,.72);
+    --panel-solid:#10121a;
+    --border:rgba(255,255,255,.09);
+    --border-soft:rgba(255,255,255,.06);
+    --text:#E7EAF0;
+    --text-mute:#8b90a0;
+    --text-faint:#5a5f70;
+    --accent:#00F0FF;
+    --accent2:#FF00E5;
+    --radius:14px;
+    --radius-sm:10px;
+    --shadow:0 12px 40px rgba(0,0,0,.55);
+  }
+  *{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;width:100%;overflow:hidden;background:var(--bg)}
+  body{
+    font-family:"gg sans","Segoe UI",system-ui,-apple-system,Roboto,Helvetica,Arial,sans-serif;
+    color:var(--text);
+    user-select:none;
+  }
+
+  /* ===== Canvas ===== */
+  #viz{
+    position:fixed;inset:0;width:100%;height:100%;display:block;
+    background:
+      radial-gradient(900px 600px at 20% 20%, rgba(0,240,255,.05), transparent 60%),
+      radial-gradient(900px 600px at 80% 80%, rgba(255,0,229,.05), transparent 60%),
+      linear-gradient(180deg,#06070a 0%, #04050a 100%);
+  }
+
+  /* ===== Top bar ===== */
+  .topbar{
+    position:fixed;top:0;left:0;right:0;z-index:20;
+    display:flex;align-items:center;gap:12px;
+    padding:12px 16px;
+    transition:opacity .4s, transform .4s;
+  }
+  .topbar.hidden{opacity:0;transform:translateY(-12px);pointer-events:none}
+  .brand{
+    display:flex;align-items:center;gap:10px;
+    padding:8px 14px;border-radius:999px;
+    background:var(--panel);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border:1px solid var(--border);
+  }
+  .brand .logo{
+    width:22px;height:22px;border-radius:6px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;
+  }
+  .brand .logo svg{width:13px;height:13px;color:#000}
+  .brand b{font-size:13px;font-weight:700;color:var(--text);letter-spacing:.01em}
+  .brand small{font-size:10px;color:var(--text-mute);margin-left:2px}
+
+  .status{
+    display:flex;align-items:center;gap:8px;
+    padding:8px 13px;border-radius:999px;
+    background:var(--panel);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border:1px solid var(--border);font-size:12px;font-weight:600;
+  }
+  .status .dot{width:8px;height:8px;border-radius:50%;background:var(--text-faint);transition:.3s}
+  .status.live .dot{background:#2DC770;box-shadow:0 0 8px #2DC770;animation:blink 1.6s infinite}
+  .status.demo .dot{background:var(--accent);box-shadow:0 0 8px var(--accent)}
+  @keyframes blink{50%{opacity:.5}}
+  .status .lbl{color:var(--text-mute)}
+  .status.live .lbl{color:#2DC770}
+  .status.demo .lbl{color:var(--accent)}
+
+  .modes{
+    display:flex;gap:6px;padding:5px;border-radius:999px;
+    background:var(--panel);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border:1px solid var(--border);overflow-x:auto;max-width:100%;scrollbar-width:none;
+  }
+  .modes::-webkit-scrollbar{display:none}
+  .mode{
+    display:flex;align-items:center;gap:6px;
+    padding:7px 13px;border-radius:999px;cursor:pointer;
+    color:var(--text-mute);font-size:12px;font-weight:600;white-space:nowrap;
+    transition:.18s;border:none;background:transparent;
+  }
+  .mode svg{width:14px;height:14px}
+  .mode:hover{color:var(--text);background:rgba(255,255,255,.05)}
+  .mode.active{
+    background:linear-gradient(135deg,rgba(0,240,255,.22),rgba(255,0,229,.22));
+    color:#fff;box-shadow:0 0 14px rgba(0,240,255,.18);
+  }
+
+  .icon-btn{
+    width:38px;height:38px;border-radius:999px;flex:0 0 auto;
+    display:grid;place-items:center;cursor:pointer;
+    background:var(--panel);backdrop-filter:blur(18px);-webkit-backdrop-filter:blur(18px);
+    border:1px solid var(--border);color:var(--text);transition:.18s;
+  }
+  .icon-btn:hover{background:rgba(255,255,255,.1)}
+  .icon-btn svg{width:17px;height:17px}
+  .icon-btn.pin.active{background:linear-gradient(135deg,var(--accent),var(--accent2));color:#000;border-color:transparent}
+
+  .spacer{flex:1}
+
+  /* ===== Settings panel ===== */
+  .settings{
+    position:fixed;top:64px;right:14px;z-index:19;
+    width:280px;max-height:calc(100vh - 78px);
+    background:var(--panel);backdrop-filter:blur(22px);-webkit-backdrop-filter:blur(22px);
+    border:1px solid var(--border);border-radius:var(--radius);
+    box-shadow:var(--shadow);
+    display:flex;flex-direction:column;
+    transition:opacity .3s, transform .3s;
+    overflow:hidden;
+  }
+  .settings.hidden{opacity:0;transform:translateX(20px) scale(.98);pointer-events:none}
+  .settings-head{
+    padding:13px 16px;border-bottom:1px solid var(--border-soft);
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  .settings-head b{font-size:13px;font-weight:700}
+  .settings-head .close{cursor:pointer;color:var(--text-mute);background:none;border:none}
+  .settings-head .close svg{width:16px;height:16px}
+  .settings-body{padding:14px 16px;overflow-y:auto;display:flex;flex-direction:column;gap:16px}
+  .settings-body::-webkit-scrollbar{width:6px}
+  .settings-body::-webkit-scrollbar-thumb{background:rgba(255,255,255,.1);border-radius:6px}
+
+  .grp{display:flex;flex-direction:column;gap:8px}
+  .grp > label{font-size:10px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--text-faint)}
+  .swatches{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+  .sw{
+    aspect-ratio:1;border-radius:9px;cursor:pointer;border:2px solid transparent;
+    transition:.15s;position:relative;overflow:hidden;
+  }
+  .sw:hover{transform:scale(1.06)}
+  .sw.active{border-color:#fff;box-shadow:0 0 0 2px rgba(255,255,255,.15)}
+  .sw::after{content:"";position:absolute;inset:0;background:inherit}
+  .sw-name{font-size:9px;text-align:center;color:var(--text-mute);margin-top:-2px;font-weight:600}
+  .swatches-wrap{display:grid;grid-template-columns:repeat(4,1fr);gap:7px 7px}
+
+  .color-row{display:flex;align-items:center;gap:10px}
+  .color-pick{
+    flex:1;display:flex;align-items:center;gap:9px;
+    padding:8px 10px;border-radius:9px;background:rgba(255,255,255,.04);border:1px solid var(--border);
+  }
+  .color-pick input[type=color]{
+    width:28px;height:28px;border:none;background:none;cursor:pointer;border-radius:6px;padding:0;
+  }
+  .color-pick input[type=color]::-webkit-color-swatch-wrapper{padding:0}
+  .color-pick input[type=color]::-webkit-color-swatch{border:1px solid var(--border);border-radius:6px}
+  .color-pick small{font-size:10px;color:var(--text-mute);font-weight:600}
+
+  .slider-row{display:flex;flex-direction:column;gap:6px}
+  .slider-row .top{display:flex;justify-content:space-between;align-items:center}
+  .slider-row .top span{font-size:11px;color:var(--text-mute);font-weight:600}
+  .slider-row .top b{font-size:11px;color:var(--text);font-weight:700;font-variant-numeric:tabular-nums}
+  input[type=range]{
+    -webkit-appearance:none;appearance:none;width:100%;height:5px;border-radius:5px;
+    background:rgba(255,255,255,.1);outline:none;cursor:pointer;
+  }
+  input[type=range]::-webkit-slider-thumb{
+    -webkit-appearance:none;width:15px;height:15px;border-radius:50%;background:#fff;cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,.5);border:2px solid var(--accent);
+  }
+  input[type=range]::-moz-range-thumb{width:13px;height:13px;border-radius:50%;background:#fff;cursor:pointer;border:2px solid var(--accent)}
+
+  .toggle-row{display:flex;align-items:center;justify-content:space-between}
+  .toggle-row span{font-size:12px;font-weight:600;color:var(--text)}
+  .tg{width:38px;height:22px;border-radius:999px;background:rgba(255,255,255,.1);position:relative;cursor:pointer;transition:.2s;border:1px solid var(--border-soft)}
+  .tg .knob{position:absolute;top:1px;left:1px;width:18px;height:18px;border-radius:50%;background:#fff;transition:.2s}
+  .tg.on{background:linear-gradient(90deg,var(--accent),var(--accent2))}
+  .tg.on .knob{left:17px}
+
+  /* ===== Start overlay ===== */
+  .overlay{
+    position:fixed;inset:0;z-index:50;
+    display:flex;align-items:center;justify-content:center;
+    background:rgba(4,5,10,.7);backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);
+    transition:opacity .4s;
+  }
+  .overlay.hidden{opacity:0;pointer-events:none}
+  .ocard{
+    width:min(440px,90vw);text-align:center;padding:32px 28px;
+    background:var(--panel);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);
+    border:1px solid var(--border);border-radius:20px;box-shadow:var(--shadow);
+    animation:cardIn .4s cubic-bezier(.2,.8,.2,1);
+  }
+  @keyframes cardIn{from{opacity:0;transform:scale(.94) translateY(10px)}to{opacity:1;transform:none}}
+  .ocard .ic{
+    width:64px;height:64px;border-radius:18px;margin:0 auto 18px;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    display:grid;place-items:center;box-shadow:0 0 40px rgba(0,240,255,.3);
+  }
+  .ocard .ic svg{width:30px;height:30px;color:#000}
+  .ocard h1{font-size:24px;font-weight:800;color:#fff;margin-bottom:6px;letter-spacing:-.01em}
+  .ocard p{font-size:13.5px;color:var(--text-mute);line-height:1.5;margin-bottom:22px}
+  .connect-btn{
+    width:100%;padding:14px;border-radius:12px;border:none;cursor:pointer;
+    background:linear-gradient(135deg,var(--accent),var(--accent2));
+    color:#000;font-size:15px;font-weight:700;transition:.18s;
+    display:flex;align-items:center;justify-content:center;gap:9px;
+  }
+  .connect-btn:hover{transform:translateY(-2px);box-shadow:0 8px 24px rgba(0,240,255,.35)}
+  .connect-btn:active{transform:translateY(0)}
+  .connect-btn svg{width:18px;height:18px}
+  .ocard .hint{
+    margin-top:16px;padding:11px 13px;border-radius:10px;
+    background:rgba(0,240,255,.07);border:1px solid rgba(0,240,255,.18);
+    font-size:11.5px;color:#9be8ff;line-height:1.5;text-align:left;
+    display:flex;gap:9px;align-items:flex-start;
+  }
+  .ocard .hint svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px;color:var(--accent)}
+  .ocard .demo-link{
+    margin-top:14px;font-size:12px;color:var(--text-mute);
+  }
+  .ocard .demo-link a{color:var(--accent);cursor:pointer;text-decoration:underline;font-weight:600}
+
+  /* ===== Toast ===== */
+  .toast-wrap{position:fixed;bottom:18px;left:50%;transform:translateX(-50%);z-index:60;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+  .toast{
+    background:var(--panel-solid);border:1px solid var(--border);border-radius:10px;
+    padding:10px 16px;font-size:12.5px;color:var(--text);box-shadow:var(--shadow);
+    display:flex;align-items:center;gap:9px;animation:toastIn .25s ease;
+  }
+  .toast .ti{width:18px;height:18px;border-radius:50%;display:grid;place-items:center;flex:0 0 auto}
+  .toast.ok .ti{background:rgba(45,199,112,.2);color:#2DC770}
+  .toast.info .ti{background:rgba(0,240,255,.2);color:var(--accent)}
+  .toast.err .ti{background:rgba(246,67,67,.2);color:#F64343}
+  .toast svg{width:11px;height:11px}
+  @keyframes toastIn{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+
+  /* ===== Small screens (medium min) ===== */
+  @media (max-width:900px){
+    .brand small{display:none}
+    .modes{max-width:280px}
+    .settings{width:250px}
+  }
+  @media (max-width:680px){
+    .topbar{flex-wrap:wrap;padding:10px}
+    .settings{top:auto;bottom:14px;right:14px;left:14px;width:auto;max-height:50vh}
+  }
+</style>
+</head>
+<body>
+<canvas id="viz"></canvas>
+
+<!-- Top bar -->
+<div class="topbar" id="topbar">
+  <div class="brand">
+    <div class="logo"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M3 12h2l2-8 4 16 3-12 2 6h5"/></svg></div>
+    <div><b>Xeneon Visualizer</b><br><small>PC Audio</small></div>
+  </div>
+  <div class="status demo" id="status">
+    <span class="dot"></span><span class="lbl" id="statusLbl">Demo</span>
+  </div>
+
+  <div class="spacer"></div>
+
+  <div class="modes" id="modes">
+    <button class="mode active" data-mode="bars"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 20V10M9 20V4M14 20v-8M19 20v-5"/></svg>Bars</button>
+    <button class="mode" data-mode="mirror"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v-6M9 12V5M14 12V6M19 12V8M4 12v6M9 12v7M14 12v6M19 12v4"/></svg>Mirror</button>
+    <button class="mode" data-mode="wave"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 12c2-6 4-6 6 0s4 6 6 0 4-6 6 0"/></svg>Wave</button>
+    <button class="mode" data-mode="radial"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M5 19l2-2M17 7l2-2"/></svg>Radial</button>
+    <button class="mode" data-mode="ring"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8"/></svg>Ring</button>
+    <button class="mode" data-mode="particles"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="6" cy="6" r="2"/><circle cx="18" cy="8" r="2"/><circle cx="10" cy="16" r="2"/><circle cx="17" cy="17" r="1.5"/><circle cx="5" cy="14" r="1.5"/></svg>Particles</button>
+  </div>
+
+  <button class="icon-btn" id="settingsBtn" title="Settings">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+  </button>
+  <button class="icon-btn pin" id="pinBtn" title="Keep controls visible">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5M9 10.76V6a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v4.76a2 2 0 0 0 .59 1.41l2.41 2.41V17H6v-1.41l2.41-2.41a2 2 0 0 0 .59-1.42Z"/></svg>
+  </button>
+</div>
+
+<!-- Settings panel -->
+<div class="settings hidden" id="settings">
+  <div class="settings-head">
+    <b>Customize</b>
+    <button class="close" id="settingsClose"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+  <div class="settings-body">
+
+    <div class="grp">
+      <label>Color Preset</label>
+      <div class="swatches-wrap" id="swatches"></div>
+    </div>
+
+    <div class="grp">
+      <label>Custom Colors</label>
+      <div class="color-row">
+        <div class="color-pick"><input type="color" id="colorA" value="#00f0ff"><small>Start</small></div>
+        <div class="color-pick"><input type="color" id="colorB" value="#ff00e5"><small>End</small></div>
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="slider-row">
+        <div class="top"><span>Sensitivity</span><b id="sensVal">1.4×</b></div>
+        <input type="range" id="sens" min="0.3" max="3" step="0.1" value="1.4">
+      </div>
+      <div class="slider-row">
+        <div class="top"><span>Smoothing</span><b id="smoothVal">0.80</b></div>
+        <input type="range" id="smooth" min="0" max="0.95" step="0.05" value="0.8">
+      </div>
+      <div class="slider-row">
+        <div class="top"><span>Glow</span><b id="glowVal">18</b></div>
+        <input type="range" id="glow" min="0" max="40" step="1" value="18">
+      </div>
+    </div>
+
+    <div class="grp">
+      <div class="toggle-row"><span>Background trail</span><div class="tg on" id="trailTg"><div class="knob"></div></div></div>
+      <div class="toggle-row"><span>Beat pulse</span><div class="tg on" id="pulseTg"><div class="knob"></div></div></div>
+    </div>
+
+  </div>
+</div>
+
+<!-- Start overlay -->
+<div class="overlay" id="overlay">
+  <div class="ocard">
+    <div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+    <h1>Music Visualizer</h1>
+    <p>Reacts live to whatever audio is playing on your PC — Spotify, YouTube, games, anything.</p>
+    <button class="connect-btn" id="connectBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M5 12h14M12 5l7 7-7 7"/></svg>
+      Connect PC Audio
+    </button>
+    <div class="hint">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+      <span>In the share dialog, choose <b>"Entire screen"</b> and tick <b>"Share system audio"</b> to capture all PC sound.</span>
+    </div>
+    <div class="demo-link">Just exploring? <a id="demoLink">Run in demo mode</a></div>
+  </div>
+</div>
+
+<div class="toast-wrap" id="toasts"></div>
+
+<script>
+/* =========================================================
+   STATE
+========================================================= */
+const PRESETS=[
+  {name:"Neon",a:"#00F0FF",b:"#FF00E5"},
+  {name:"Aurora",a:"#00FF9D",b:"#00B8FF"},
+  {name:"Sunset",a:"#FF6B00",b:"#FF006E"},
+  {name:"Lava",a:"#FF3300",b:"#FFCC00"},
+  {name:"UV",a:"#B400FF",b:"#FF00C8"},
+  {name:"Gold",a:"#FFD700",b:"#FF6B00"},
+  {name:"Matrix",a:"#00FF41",b:"#008F11"},
+  {name:"Mono",a:"#FFFFFF",b:"#777777"}
+];
+const state={
+  mode:"bars",
+  presetIdx:0,
+  colorA:"#00f0ff",
+  colorB:"#ff00e5",
+  sens:1.4,
+  smooth:0.8,
+  glow:18,
+  trail:true,
+  pulse:true,
+  pinned:false,
+  connected:false,
+  demo:true
+};
+
+/* =========================================================
+   CANVAS SETUP
+========================================================= */
+const canvas=document.getElementById('viz');
+const ctx=canvas.getContext('2d');
+let W=0,H=0,DPR=1;
+function resize(){
+  DPR=Math.min(window.devicePixelRatio||1,2);
+  W=canvas.clientWidth=window.innerWidth;
+  H=canvas.clientHeight=window.innerHeight;
+  canvas.width=W*DPR;canvas.height=H*DPR;
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+window.addEventListener('resize',resize);resize();
+
+/* =========================================================
+   AUDIO ENGINE
+========================================================= */
+let audioCtx,analyser,source,freqData,timeData;
+const FFT=1024;
+async function connectAudio(){
+  try{
+    const stream=await navigator.mediaDevices.getDisplayMedia({
+      video:{width:1,height:1},
+      audio:{
+        echoCancellation:false,noiseSuppression:false,autoGainControl:false
+      }
+    });
+    // user may have picked video-only; check audio track
+    if(stream.getAudioTracks().length===0){
+      stream.getTracks().forEach(t=>t.stop());
+      toast('err','No audio shared. Tick "Share system audio" next time.');
+      return false;
+    }
+    audioCtx=new (window.AudioContext||window.webkitAudioContext)();
+    source=audioCtx.createMediaStreamSource(stream);
+    analyser=audioCtx.createAnalyser();
+    analyser.fftSize=FFT;
+    analyser.smoothingTimeConstant=state.smooth;
+    source.connect(analyser);
+    freqData=new Uint8Array(analyser.frequencyBinCount);
+    timeData=new Uint8Array(analyser.fftSize);
+    state.connected=true;state.demo=false;
+    // stop if user ends the share
+    stream.getAudioTracks()[0].addEventListener('ended',()=>{
+      disconnectAudio();
+      toast('info','Audio sharing ended');
+    });
+    updateStatus();
+    document.getElementById('overlay').classList.add('hidden');
+    toast('ok','Connected to PC audio');
+    return true;
+  }catch(e){
+    if(e.name!=='NotAllowedError') toast('err','Could not connect: '+(e.message||e.name));
+    return false;
+  }
+}
+function disconnectAudio(){
+  state.connected=false;state.demo=true;
+  if(audioCtx){try{audioCtx.close()}catch(e){}}
+  audioCtx=null;analyser=null;source=null;
+  updateStatus();
+}
+
+function updateStatus(){
+  const s=document.getElementById('status');
+  const l=document.getElementById('statusLbl');
+  if(state.connected){s.className='status live';l.textContent='Live';}
+  else{s.className='status demo';l.textContent='Demo';}
+}
+
+/* =========================================================
+   DEMO DATA (when not connected)
+========================================================= */
+const demoFreq=new Uint8Array(FFT/2);
+const demoTime=new Uint8Array(FFT);
+let demoT=0;
+function fillDemo(){
+  demoT+=0.025;
+  for(let i=0;i<demoFreq.length;i++){
+    const f=i/demoFreq.length;
+    const v=Math.sin(demoT*1.3+i*0.18)*0.5+0.5;
+    const v2=Math.sin(demoT*2.1+i*0.07)*0.5+0.5;
+    const env=Math.pow(1-f,1.5);
+    const bass=i<40?Math.sin(demoT*3)*0.4+0.5:0;
+    demoFreq[i]=Math.min(255,(v*0.5+v2*0.3+bass)*env*220*state.sens);
+  }
+  for(let i=0;i<demoTime.length;i++){
+    demoTime[i]=128+Math.sin(demoT*2+i*0.05)*60*(Math.sin(demoT*0.7)*0.5+0.5);
+  }
+}
+
+function getFreq(){
+  if(state.connected&&analyser){analyser.getByteFrequencyData(freqData);return freqData;}
+  fillDemo();return demoFreq;
+}
+function getTime(){
+  if(state.connected&&analyser){analyser.getByteTimeDomainData(timeData);return timeData;}
+  return demoTime;
+}
+function getBass(freq){
+  // average of low bins
+  let s=0;const n=Math.min(24,freq.length);
+  for(let i=0;i<n;i++)s+=freq[i];
+  return s/n/255;
+}
+
+/* =========================================================
+   COLOR HELPERS
+========================================================= */
+function hexRgb(h){const c=h.replace('#','');return[parseInt(c.slice(0,2),16),parseInt(c.slice(2,4),16),parseInt(c.slice(4,6),16)];}
+function lerpColor(a,b,t){
+  const[ar,ag,ab]=hexRgb(a),[br,bg,bb]=hexRgb(b);
+  return `rgb(${Math.round(ar+(br-ar)*t)},${Math.round(ag+(bg-ag)*t)},${Math.round(ab+(bb-ab)*t)})`;
+}
+function rgba(h,a){const[r,g,b]=hexRgb(h);return `rgba(${r},${g},${b},${a})`;}
+function grad(x0,y0,x1,y1){
+  const g=ctx.createLinearGradient(x0,y0,x1,y1);
+  g.addColorStop(0,state.colorA);g.addColorStop(1,state.colorB);return g;
+}
+
+/* =========================================================
+   RENDER MODES
+========================================================= */
+function clearFrame(){
+  if(state.trail){
+    ctx.fillStyle='rgba(6,7,10,0.22)';
+    ctx.fillRect(0,0,W,H);
+  }else{
+    ctx.clearRect(0,0,W,H);
+  }
+}
+
+let beat=0;
+function drawBars(freq){
+  const n=Math.min(96,Math.floor(W/10));
+  const barW=W/n;
+  const gap=Math.max(1,barW*0.18);
+  const bw=barW-gap;
+  ctx.save();
+  if(state.glow>0){ctx.shadowBlur=state.glow;ctx.shadowColor=state.colorA;}
+  for(let i=0;i<n;i++){
+    const idx=Math.floor(Math.pow(i/n,1.4)*freq.length*0.7);
+    const v=Math.min(1,freq[idx]/255*state.sens);
+    const bh=v*H*0.85;
+    const x=i*barW+gap/2;
+    const y=H-bh;
+    const g=grad(0,y,0,H);
+    ctx.fillStyle=g;
+    ctx.fillRect(x,y,bw,bh);
+    // cap
+    ctx.fillStyle=lerpColor(state.colorA,state.colorB,v);
+    ctx.fillRect(x,y-3,bw,3);
+  }
+  ctx.restore();
+}
+
+function drawMirror(freq){
+  const n=Math.min(96,Math.floor(W/10));
+  const barW=W/n;const gap=Math.max(1,barW*0.18);const bw=barW-gap;
+  const mid=H/2;
+  ctx.save();
+  if(state.glow>0){ctx.shadowBlur=state.glow;ctx.shadowColor=state.colorB;}
+  for(let i=0;i<n;i++){
+    const idx=Math.floor(Math.pow(i/n,1.4)*freq.length*0.7);
+    const v=Math.min(1,freq[idx]/255*state.sens);
+    const bh=v*H*0.42;
+    const x=i*barW+gap/2;
+    const g=grad(0,mid-bh,0,mid+bh);
+    ctx.fillStyle=g;
+    ctx.fillRect(x,mid-bh,bw,bh*2);
+  }
+  ctx.restore();
+  // center line
+  ctx.strokeStyle=rgba(state.colorA,0.3);ctx.lineWidth=1;
+  ctx.beginPath();ctx.moveTo(0,mid);ctx.lineTo(W,mid);ctx.stroke();
+}
+
+function drawWave(time){
+  ctx.save();
+  if(state.glow>0){ctx.shadowBlur=state.glow*1.3;ctx.shadowColor=state.colorA;}
+  // main wave
+  ctx.lineWidth=Math.max(2,H*0.006);
+  const g=grad(0,0,W,0);
+  ctx.strokeStyle=g;
+  ctx.beginPath();
+  const step=Math.max(1,Math.floor(time.length/W*2));
+  for(let i=0,x=0;i<time.length;i+=step,x+=W/(time.length/step)){
+    const v=(time[i]-128)/128;
+    const y=H/2+v*H*0.38*state.sens;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  // mirrored ghost
+  ctx.globalAlpha=0.35;
+  ctx.beginPath();
+  for(let i=0,x=0;i<time.length;i+=step,x+=W/(time.length/step)){
+    const v=(time[i]-128)/128;
+    const y=H/2-v*H*0.38*state.sens;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  }
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawRadial(freq){
+  const cx=W/2,cy=H/2;
+  const baseR=Math.min(W,H)*0.16;
+  const n=72;
+  ctx.save();
+  ctx.translate(cx,cy);
+  if(state.glow>0){ctx.shadowBlur=state.glow;ctx.shadowColor=state.colorA;}
+  for(let i=0;i<n;i++){
+    const idx=Math.floor(Math.pow(i/n,1.3)*freq.length*0.6);
+    const v=Math.min(1,freq[idx]/255*state.sens);
+    const len=v*Math.min(W,H)*0.3;
+    const ang=(i/n)*Math.PI*2 - Math.PI/2;
+    const x1=Math.cos(ang)*baseR,y1=Math.sin(ang)*baseR;
+    const x2=Math.cos(ang)*(baseR+len),y2=Math.sin(ang)*(baseR+len);
+    ctx.strokeStyle=lerpColor(state.colorA,state.colorB,v);
+    ctx.lineWidth=Math.max(2,(Math.PI*2*baseR/n)*0.6);
+    ctx.lineCap='round';
+    ctx.beginPath();ctx.moveTo(x1,y1);ctx.lineTo(x2,y2);ctx.stroke();
+  }
+  // pulsing core
+  const b=getBass(freq);
+  const coreR=baseR*(0.7+b*0.5);
+  const rg=ctx.createRadialGradient(0,0,0,0,0,coreR);
+  rg.addColorStop(0,rgba(state.colorA,0.8));
+  rg.addColorStop(0.6,rgba(state.colorB,0.25));
+  rg.addColorStop(1,rgba(state.colorB,0));
+  ctx.fillStyle=rg;
+  ctx.beginPath();ctx.arc(0,0,coreR,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawRing(freq,time){
+  const cx=W/2,cy=H/2;
+  const baseR=Math.min(W,H)*0.28;
+  const b=getBass(freq);
+  const r=baseR*(1+b*0.18*state.sens);
+  ctx.save();
+  if(state.glow>0){ctx.shadowBlur=state.glow;ctx.shadowColor=state.colorB;}
+  // deformed circle from waveform
+  ctx.lineWidth=Math.max(2,H*0.005);
+  ctx.strokeStyle=grad(0,0,W,0);
+  ctx.beginPath();
+  const n=180;
+  for(let i=0;i<=n;i++){
+    const idx=Math.floor(i/n*time.length);
+    const v=(time[idx]-128)/128;
+    const ang=(i/n)*Math.PI*2;
+    const rr=r+v*r*0.28*state.sens;
+    const x=cx+Math.cos(ang)*rr,y=cy+Math.sin(ang)*rr;
+    if(i===0)ctx.moveTo(x,y);else ctx.lineTo(x,y);
+  }
+  ctx.closePath();ctx.stroke();
+  // inner glow disc
+  const rg=ctx.createRadialGradient(cx,cy,0,cx,cy,r*0.9);
+  rg.addColorStop(0,rgba(state.colorA,0.18+b*0.2));
+  rg.addColorStop(1,rgba(state.colorB,0));
+  ctx.fillStyle=rg;ctx.beginPath();ctx.arc(cx,cy,r*0.9,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+/* particles */
+const particles=[];
+const MAXP=140;
+function initParticles(){
+  particles.length=0;
+  for(let i=0;i<MAXP;i++){
+    particles.push({x:Math.random()*W,y:Math.random()*H,vx:(Math.random()-0.5)*0.6,vy:(Math.random()-0.5)*0.6,r:Math.random()*3+1,life:Math.random()});
+  }
+}
+initParticles();
+function drawParticles(freq){
+  const b=getBass(freq);
+  const energy=Math.min(1,freq[8]/255*state.sens+freq[20]/255*state.sens*0.5);
+  ctx.save();
+  if(state.glow>0){ctx.shadowBlur=state.glow;ctx.shadowColor=state.colorA;}
+  for(const p of particles){
+    p.x+=p.vx*(1+energy*4);
+    p.y+=p.vy*(1+energy*4)-energy*0.5;
+    p.life+=0.005+energy*0.02;
+    if(p.x<0||p.x>W||p.y<0||p.y>H||p.life>1){
+      p.x=Math.random()*W;p.y=Math.random()*H;p.life=0;
+      p.vx=(Math.random()-0.5)*0.6;p.vy=(Math.random()-0.5)*0.6;
+    }
+    const size=p.r*(1+energy*5+b*3);
+    const alpha=0.4+energy*0.6;
+    const t=(p.life)%1;
+    ctx.fillStyle=lerpColor(state.colorA,state.colorB,t);
+    ctx.globalAlpha=alpha;
+    ctx.beginPath();ctx.arc(p.x,p.y,size,0,Math.PI*2);ctx.fill();
+  }
+  ctx.globalAlpha=1;
+  ctx.restore();
+}
+
+/* =========================================================
+   RENDER LOOP
+========================================================= */
+function render(){
+  const freq=getFreq();
+  const time=getTime();
+  clearFrame();
+  switch(state.mode){
+    case 'bars':drawBars(freq);break;
+    case 'mirror':drawMirror(freq);break;
+    case 'wave':drawWave(time);break;
+    case 'radial':drawRadial(freq);break;
+    case 'ring':drawRing(freq,time);break;
+    case 'particles':drawParticles(freq);break;
+  }
+  requestAnimationFrame(render);
+}
+render();
+
+/* =========================================================
+   UI WIRING
+========================================================= */
+// modes
+document.querySelectorAll('.mode').forEach(m=>{
+  m.addEventListener('click',()=>{
+    document.querySelectorAll('.mode').forEach(x=>x.classList.remove('active'));
+    m.classList.add('active');
+    state.mode=m.dataset.mode;
+    if(state.mode==='particles')initParticles();
+    toast('info','Mode: '+m.textContent.trim());
+  });
+});
+
+// presets
+const swEl=document.getElementById('swatches');
+PRESETS.forEach((p,i)=>{
+  const w=document.createElement('div');w.style.display='flex';w.style.flexDirection='column';w.style.gap='4px';
+  const s=document.createElement('div');s.className='sw'+(i===0?' active':'');
+  s.style.background=`linear-gradient(135deg,${p.a},${p.b})`;
+  s.title=p.name;
+  s.addEventListener('click',()=>{
+    document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));
+    s.classList.add('active');
+    state.presetIdx=i;state.colorA=p.a;state.colorB=p.b;
+    document.getElementById('colorA').value=p.a;
+    document.getElementById('colorB').value=p.b;
+  });
+  const nm=document.createElement('div');nm.className='sw-name';nm.textContent=p.name;
+  w.appendChild(s);w.appendChild(nm);swEl.appendChild(w);
+});
+
+// custom colors
+document.getElementById('colorA').addEventListener('input',e=>{
+  state.colorA=e.target.value;
+  document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));
+});
+document.getElementById('colorB').addEventListener('input',e=>{
+  state.colorB=e.target.value;
+  document.querySelectorAll('.sw').forEach(x=>x.classList.remove('active'));
+});
+
+// sliders
+function bindSlider(id,valId,suffix,prop,fmt){
+  const el=document.getElementById(id),v=document.getElementById(valId);
+  el.addEventListener('input',e=>{
+    state[prop]=parseFloat(e.target.value);
+    v.textContent=fmt?fmt(state[prop]):state[prop]+(suffix||'');
+    if(prop==='smooth'&&analyser)analyser.smoothingTimeConstant=state.smooth;
+  });
+}
+bindSlider('sens','sensVal','×','sens',v=>v.toFixed(1)+'×');
+bindSlider('smooth','smoothVal','','smooth',v=>v.toFixed(2));
+bindSlider('glow','glowVal','','glow',v=>Math.round(v));
+
+// toggles
+function bindToggle(id,prop){
+  const el=document.getElementById(id);
+  el.addEventListener('click',()=>{state[prop]=!state[prop];el.classList.toggle('on',state[prop]);});
+}
+bindToggle('trailTg','trail');
+bindToggle('pulseTg','pulse');
+
+// settings open/close
+const settingsEl=document.getElementById('settings');
+document.getElementById('settingsBtn').addEventListener('click',()=>settingsEl.classList.toggle('hidden'));
+document.getElementById('settingsClose').addEventListener('click',()=>settingsEl.classList.add('hidden'));
+
+// pin
+const pinBtn=document.getElementById('pinBtn');
+pinBtn.addEventListener('click',()=>{state.pinned=!state.pinned;pinBtn.classList.toggle('active',state.pinned);toast('info',state.pinned?'Controls pinned':'Auto-hide on');});
+
+// connect
+document.getElementById('connectBtn').addEventListener('click',connectAudio);
+document.getElementById('demoLink').addEventListener('click',()=>{
+  document.getElementById('overlay').classList.add('hidden');
+  toast('info','Running in demo mode');
+});
+
+/* auto-hide top bar */
+let hideTimer;
+const topbar=document.getElementById('topbar');
+function poke(){
+  topbar.classList.remove('hidden');
+  clearTimeout(hideTimer);
+  if(!state.pinned){
+    hideTimer=setTimeout(()=>topbar.classList.add('hidden'),4200);
+  }
+}
+window.addEventListener('mousemove',poke);
+window.addEventListener('touchstart',poke,{passive:true});
+window.addEventListener('click',poke);
+poke();
+
+/* =========================================================
+   TOAST
+========================================================= */
+function toast(type,msg){
+  const wrap=document.getElementById('toasts');
+  const t=document.createElement('div');t.className='toast '+type;
+  const ics={ok:'<path d="M20 6 9 17l-5-5"/>',info:'<path d="M12 16v-4M12 8h.01"/><circle cx="12" cy="12" r="10"/>',err:'<circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6M9 9l6 6"/>'};
+  t.innerHTML=`<span class="ti"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">${ics[type]}</svg></span>${msg}`;
+  wrap.appendChild(t);
+  setTimeout(()=>{t.style.transition='.3s';t.style.opacity='0';t.style.transform='translateY(8px)';setTimeout(()=>t.remove(),300);},2200);
+}
+
+// keyboard shortcut: space to toggle overlay/connect
+window.addEventListener('keydown',e=>{
+  if(e.code==='Space'&&!state.connected){e.preventDefault();connectAudio();}
+});
+</script>
+</body>
+</html>
